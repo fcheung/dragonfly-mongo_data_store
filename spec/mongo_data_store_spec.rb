@@ -11,7 +11,7 @@ describe Dragonfly::MongoDataStore do
   let(:new_content) { Dragonfly::Content.new(app) }
 
   before(:each) do
-    @data_store = Dragonfly::MongoDataStore.new :database => 'dragonfly_test'
+    @data_store = Dragonfly::MongoDataStore.new :database => 'dragonfly_test', :host => 'localhost'
   end
 
   describe "configuring the app" do
@@ -28,42 +28,52 @@ describe Dragonfly::MongoDataStore do
   describe "connecting to a replica set" do
     it "should initiate a replica set connection if hosts is set" do
       @data_store.hosts = ['1.2.3.4:27017', '1.2.3.4:27017']
-      @data_store.connection_opts = {:name => 'testingset'}
-      Mongo::ReplSetConnection.should_receive(:new).with(['1.2.3.4:27017', '1.2.3.4:27017'], :name => 'testingset')
+      @data_store.connection_opts = {:replica_set => 'testingset'}
+      Mongo::Client.should_receive(:new).with(['1.2.3.4:27017', '1.2.3.4:27017'], :database => 'dragonfly_test', :replica_set => 'testingset')
       @data_store.connection
     end
   end
 
-  describe "authenticating" do
-    it "should not attempt to authenticate if a username is not given" do
-      @data_store.db.should_not_receive(:authenticate)
-      @data_store.write(content)
+  describe "connecting with a uri" do
+    it "should initialize the driver with the uri" do
+      @data_store.uri = "mongodb://localhost:27017/some_db"
+      @data_store.connection_opts = {:read_retry_interval => 1}
+      Mongo::Client.should_receive(:new).with("mongodb://localhost:27017/some_db", :database => 'dragonfly_test', :read_retry_interval => 1)
+      @data_store.connection
     end
 
-    it "should attempt to authenticate once if a username is given" do
+    it 'uses the db from the uri' do
+      @data_store = Dragonfly::MongoDataStore.new uri: "mongodb://localhost:27017/some_db"
+      @data_store.db.name.should == 'some_db'
+    end
+  end
+
+
+  describe "authenticating" do
+
+    it "should pass credentials to the driver" do
       @data_store.username = 'terry'
       @data_store.password = 'butcher'
-      @data_store.db.should_receive(:authenticate).exactly(:once).with('terry','butcher').and_return(true)
-      uid = @data_store.write(content)
-      @data_store.read(uid)
+      Mongo::Client.should_receive(:new).with(anything, database: 'dragonfly_test', user: 'terry', password: 'butcher')
+      @data_store.connection
     end
   end
 
   describe "sharing already configured stuff" do
     before(:each) do
-      @connection = Mongo::Connection.new
+      @connection = Mongo::Client.new(['localhost:27017'])
     end
 
     it "should allow sharing the connection" do
       data_store = Dragonfly::MongoDataStore.new :connection => @connection
-      @connection.should_receive(:db).and_return(db=double)
+      @connection.should_receive(:database).and_return(db=double)
       data_store.db.should == db
     end
 
     it "should allow sharing the db" do
-      db = @connection.db('dragonfly_test_yo')
+      db = @connection.with(database: 'dragonfly_test_yo').database 
       data_store = Dragonfly::MongoDataStore.new :db => db
-      data_store.grid.instance_eval{@db}.should == db # so wrong
+      data_store.grid.database.should == db # so wrong
     end
   end
 
@@ -71,22 +81,24 @@ describe Dragonfly::MongoDataStore do
     it "should serve straight from mongo with the correct content type (taken from ext)" do
       content.name = 'text.txt'
       uid = @data_store.write(content)
-      response = @data_store.grid.get(BSON::ObjectId(uid))
-      response.content_type.should == 'text/plain'
-      response.read.should == content.data
+      response = @data_store.grid.find_one(_id: BSON::ObjectId(uid))
+      response.info.content_type.should == 'text/plain'
+      response.data.should == content.data
     end
   end
 
   describe "already stored stuff" do
     it "still works" do
-      uid = @data_store.grid.put("DOOBS", :metadata => {'some' => 'meta'}).to_s
+      file = Mongo::Grid::File.new("DOOBS",:metadata => {'some' => 'meta'})
+      uid = @data_store.grid.insert_one(file)
       new_content.update(*@data_store.read(uid))
       new_content.data.should == "DOOBS"
       new_content.meta['some'].should == 'meta'
     end
 
     it "still works when meta was stored as a marshal dumped hash (but stringifies keys)" do
-      uid = @data_store.grid.put("DOOBS", :metadata => Dragonfly::Serializer.marshal_b64_encode(:some => 'stuff')).to_s
+      file = Mongo::Grid::File.new("DOOBS",:metadata => Dragonfly::Serializer.b64_encode(Marshal.dump(:some => 'stuff')))
+      uid = @data_store.grid.insert_one(file)      
       c, meta = @data_store.read(uid)
       meta['some'].should == 'stuff'
     end

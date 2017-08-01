@@ -11,73 +11,89 @@ module Dragonfly
     def initialize(opts={})
       @host            = opts[:host]
       @hosts           = opts[:hosts]
+      @uri             = opts[:uri]
       @connection_opts = opts[:connection_opts] || {}
       @port            = opts[:port]
-      @database        = opts[:database] || 'dragonfly'
-      @username        = opts[:username]
+      @database        = opts[:database] || (@uri ? nil : 'dragonfly')
+      @user            = opts[:user] || opts[:username] #username is the legacy one
       @password        = opts[:password]
       @connection      = opts[:connection]
       @db              = opts[:db]
     end
 
-    attr_accessor :host, :hosts, :connection_opts, :port, :database, :username, :password
+    attr_accessor :host, :hosts, :connection_opts, :port, :user, :password, :uri
+    alias_method :username, :user
+    alias_method :username=, :user=
 
     def write(content, opts={})
-      ensure_authenticated!
       content.file do |f|
-        mongo_id = grid.put(f, :content_type => content.mime_type, :metadata => content.meta)
+        mongo_id = grid.upload_from_stream(nil, f, :content_type => content.mime_type, :metadata => content.meta)
         mongo_id.to_s
       end
     end
 
     def read(uid)
-      ensure_authenticated!
-      grid_io = grid.get(bson_id(uid))
-      meta = extract_meta(grid_io)
-      [grid_io.read, meta]
-    rescue Mongo::GridFileNotFound, BSON::InvalidObjectId => e
+      result = nil
+      grid.open_download_stream(bson_id(uid)) do |stream|
+        body = stream.read
+        meta = extract_meta(stream.file_info)
+        result = [body, meta]
+      end
+      result 
+    rescue Mongo::Error::FileNotFound, BSON::ObjectId::Invalid => e
       nil
     end
 
     def destroy(uid)
-      ensure_authenticated!
       grid.delete(bson_id(uid))
-    rescue Mongo::GridFileNotFound, BSON::InvalidObjectId => e
+    rescue Mongo::Error::FileNotFound, BSON::ObjectId::Invalid => e
       Dragonfly.warn("#{self.class.name} destroy error: #{e}")
+    end
+
+    def database
+      connection.database
+    end
+
+    def database= name
+      @connection = connection.use(database: name)
     end
 
     def connection
       @connection ||= if hosts
-        Mongo::ReplSetConnection.new(hosts, connection_opts)
+        Mongo::Client.new(hosts, connection_opts)
+      elsif uri
+        Mongo::Client.new(uri, connection_opts)
       else
-        Mongo::Connection.new(host, port, connection_opts)
+        Mongo::Client.new(["#{host}:#{port}"], connection_opts)
       end
     end
 
     def db
-      @db ||= connection.db(database)
+      @db ||= connection.database
     end
 
     def grid
-      @grid ||= Mongo::Grid.new(db)
+      @grid ||= db.fs
     end
 
     private
 
-    def ensure_authenticated!
-      if username
-        @authenticated ||= db.authenticate(username, password)
-      end
+
+    def connection_opts
+      @connection_opts.merge(password: password, 
+                             database: @database,
+                                 user: username).
+                       reject {|_, value| value.nil?}
     end
 
     def bson_id(uid)
       BSON::ObjectId.from_string(uid)
     end
 
-    def extract_meta(grid_io)
-      meta = grid_io.metadata
+    def extract_meta(file_info)
+      meta = file_info.metadata
       meta = Utils.stringify_keys(marshal_b64_decode(meta)) if meta.is_a?(String) # Deprecated encoded meta
-      meta.merge!('stored_at' => grid_io.upload_date)
+      meta.merge!('stored_at' => file_info.upload_date)
       meta
     end
 
