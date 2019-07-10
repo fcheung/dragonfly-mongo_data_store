@@ -2,7 +2,7 @@
 require 'spec_helper'
 require 'dragonfly/mongo_data_store'
 require 'dragonfly/spec/data_store_examples'
-require 'mongo'
+require 'mongov1'
 
 describe Dragonfly::MongoDataStore do
 
@@ -29,7 +29,7 @@ describe Dragonfly::MongoDataStore do
     it "should initiate a replica set connection if hosts is set" do
       @data_store.hosts = ['1.2.3.4:27017', '1.2.3.4:27017']
       @data_store.connection_opts = {:name => 'testingset'}
-      Mongo::ReplSetConnection.should_receive(:new).with(['1.2.3.4:27017', '1.2.3.4:27017'], :name => 'testingset')
+      MongoV1::ReplSetConnection.should_receive(:new).with(['1.2.3.4:27017', '1.2.3.4:27017'], :name => 'testingset')
       @data_store.connection
     end
   end
@@ -51,7 +51,7 @@ describe Dragonfly::MongoDataStore do
 
   describe "sharing already configured stuff" do
     before(:each) do
-      @connection = Mongo::Connection.new
+      @connection = MongoV1::Connection.new
     end
 
     it "should allow sharing the connection" do
@@ -71,7 +71,7 @@ describe Dragonfly::MongoDataStore do
     it "should serve straight from mongo with the correct content type (taken from ext)" do
       content.name = 'text.txt'
       uid = @data_store.write(content)
-      response = @data_store.grid.get(BSON::ObjectId(uid))
+      response = @data_store.grid.get(BSONV1::ObjectId(uid))
       response.content_type.should == 'text/plain'
       response.read.should == content.data
     end

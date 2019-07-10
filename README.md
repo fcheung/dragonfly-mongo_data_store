@@ -35,12 +35,12 @@ datastore :mongo, host: 'my.host', database: 'my_database'
 ```ruby
 :host              # e.g. 'my.domain'
 :hosts             # for replica sets, e.g. ['n1.mydb.net:27017', 'n2.mydb.net:27017']
-:connection_opts   # hash that passes through to Mongo::Connection or Mongo::ReplSetConnection
+:connection_opts   # hash that passes through to MongoV1::Connection or MongoV1::ReplSetConnection
 :port              # e.g. 27017
 :database          # defaults to 'dragonfly'
 :username
 :password
-:connection        # use this if you already have a Mongo::Connection object
-:db                # use this if you already have a Mongo::DB object
+:connection        # use this if you already have a MongoV1::Connection object
+:db                # use this if you already have a MongoV1::DB object
 ```
 

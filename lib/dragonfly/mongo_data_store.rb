@@ -1,4 +1,4 @@
-require 'mongo'
+require 'mongov1'
 require 'dragonfly'
 
 Dragonfly::App.register_datastore(:mongo){ Dragonfly::MongoDataStore }
@@ -35,22 +35,22 @@ module Dragonfly
       grid_io = grid.get(bson_id(uid))
       meta = extract_meta(grid_io)
       [grid_io.read, meta]
-    rescue Mongo::GridFileNotFound, BSON::InvalidObjectId => e
+    rescue MongoV1::GridFileNotFound, BSONV1::InvalidObjectId => e
       nil
     end
 
     def destroy(uid)
       ensure_authenticated!
       grid.delete(bson_id(uid))
-    rescue Mongo::GridFileNotFound, BSON::InvalidObjectId => e
+    rescue MongoV1::GridFileNotFound, BSONV1::InvalidObjectId => e
       Dragonfly.warn("#{self.class.name} destroy error: #{e}")
     end
 
     def connection
       @connection ||= if hosts
-        Mongo::ReplSetConnection.new(hosts, connection_opts)
+        MongoV1::ReplSetConnection.new(hosts, connection_opts)
       else
-        Mongo::Connection.new(host, port, connection_opts)
+        MongoV1::Connection.new(host, port, connection_opts)
       end
     end
 
@@ -59,7 +59,7 @@ module Dragonfly
     end
 
     def grid
-      @grid ||= Mongo::Grid.new(db)
+      @grid ||= MongoV1::Grid.new(db)
     end
 
     private
@@ -71,7 +71,7 @@ module Dragonfly
     end
 
     def bson_id(uid)
-      BSON::ObjectId.from_string(uid)
+      BSONV1::ObjectId.from_string(uid)
     end
 
     def extract_meta(grid_io)
