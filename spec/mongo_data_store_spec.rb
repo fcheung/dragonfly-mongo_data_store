@@ -86,7 +86,7 @@ describe Dragonfly::MongoDataStore do
     end
 
     it "still works when meta was stored as a marshal dumped hash (but stringifies keys)" do
-      uid = @data_store.grid.put("DOOBS", :metadata => Dragonfly::Serializer.marshal_b64_encode(:some => 'stuff')).to_s
+      uid = @data_store.grid.put("DOOBS", :metadata => Dragonfly::Serializer.json_b64_encode(:some => 'stuff')).to_s
       c, meta = @data_store.read(uid)
       meta['some'].should == 'stuff'
     end

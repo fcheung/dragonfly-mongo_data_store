@@ -76,7 +76,7 @@ module Dragonfly
 
     def extract_meta(grid_io)
       meta = grid_io.metadata
-      meta = Utils.stringify_keys(marshal_b64_decode(meta)) if meta.is_a?(String) # Deprecated encoded meta
+      meta = Utils.stringify_keys(json_b64_decode(meta)) if meta.is_a?(String) # Deprecated encoded meta
       meta.merge!('stored_at' => grid_io.upload_date)
       meta
     end
