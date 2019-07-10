@@ -92,7 +92,7 @@ module Dragonfly
 
     def extract_meta(file_info)
       meta = file_info.metadata
-      meta = Utils.stringify_keys(marshal_b64_decode(meta)) if meta.is_a?(String) # Deprecated encoded meta
+      meta = Utils.stringify_keys(json_b64_decode(meta)) if meta.is_a?(String) # Deprecated encoded meta
       meta.merge!('stored_at' => file_info.upload_date)
       meta
     end

@@ -97,7 +97,7 @@ describe Dragonfly::MongoDataStore do
     end
 
     it "still works when meta was stored as a marshal dumped hash (but stringifies keys)" do
-      file = Mongo::Grid::File.new("DOOBS",:metadata => Dragonfly::Serializer.b64_encode(Marshal.dump(:some => 'stuff')))
+      file = Mongo::Grid::File.new("DOOBS",:metadata => Dragonfly::Serializer.json_b64_encode(:some => 'stuff'))
       uid = @data_store.grid.insert_one(file)      
       c, meta = @data_store.read(uid)
       meta['some'].should == 'stuff'
